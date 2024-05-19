@@ -1,0 +1,19 @@
+import subprocess
+import time
+
+def start_process(command):
+    return subprocess.Popen(command, shell=True)
+
+if __name__ == "__main__":
+    server_process = start_process("python3 server.py")
+    time.sleep(1)  # wait for the server to start
+
+    client1_process = start_process("python3 client.py 1")
+    client2_process = start_process("python3 client.py 2")
+
+    try:
+        time.sleep(300)  # let it run for 5 minutes
+    finally:
+        server_process.terminate()
+        client1_process.terminate()
+        client2_process.terminate()

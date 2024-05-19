@@ -1,0 +1,72 @@
+import asyncio
+import random
+import datetime
+
+class Server:
+    def __init__(self, host='127.0.0.1', port=8888):
+        self.host = host
+        self.port = port
+        self.clients = []
+        self.request_counter = 0
+        self.response_counter = 0
+        self.start_time = None
+        self.log_file = open("server_log.txt", "a")
+
+    async def handle_client(self, reader, writer):
+        client_id = len(self.clients) + 1
+        self.clients.append(writer)
+        addr = writer.get_extra_info('peername')
+        print(f"Client {client_id} connected from {addr}")
+
+        while True:
+            data = await reader.readuntil(b'\n')
+            if not data:
+                break
+            message = data.decode().strip()
+            request_number = message.split()[0][1:-1]
+            request_time = datetime.datetime.now()
+            log_entry = f"{request_time.strftime('%Y-%m-%d')};{request_time.strftime('%H:%M:%S.%f')[:-3]};{message};"
+
+            if random.random() < 0.1:
+                log_entry += "(проигнорировано)\n"
+                self.log_file.write(log_entry)
+                continue
+
+            await asyncio.sleep(random.uniform(0.1, 1))
+            response_time = datetime.datetime.now()
+            response = f"[{self.response_counter}/{request_number}] PONG ({client_id})\n"
+            log_entry += f"{response_time.strftime('%H:%M:%S.%f')[:-3]};{response.strip()}\n"
+            self.log_file.write(log_entry)
+            self.response_counter += 1
+            writer.write(response.encode())
+            await writer.drain()
+
+        writer.close()
+        await writer.wait_closed()
+        self.clients.remove(writer)
+        print(f"Client {client_id} disconnected")
+
+    async def keepalive(self):
+        while True:
+            await asyncio.sleep(5)
+            message = f"[{self.response_counter}] keepalive\n"
+            for writer in self.clients:
+                writer.write(message.encode())
+                await writer.drain()
+            self.response_counter += 1
+
+    async def run(self):
+        server = await asyncio.start_server(self.handle_client, self.host, self.port)
+        addr = server.sockets[0].getsockname()
+        print(f"Serving on {addr}")
+
+        self.start_time = datetime.datetime.now()
+        async with server:
+            await asyncio.gather(server.serve_forever(), self.keepalive())
+
+async def main():
+    server = Server()
+    await server.run()
+
+if __name__ == "__main__":
+    asyncio.run(main())
